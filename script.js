@@ -121,76 +121,135 @@ const volumeControl = document.getElementById('volume-control');
 const searchBar = document.getElementById('search-bar');
 const viewAllBtn = document.getElementById('view-all-btn');
 const songList = document.getElementById('song-list');
+const progressBar = document.getElementById('progress-bar'); // New element for progress bar
+const currentTimeEl = document.getElementById('current-time'); // New element for current time
+const totalDurationEl = document.getElementById('total-duration'); // New element for total duration
 
 const audio = new Audio();
 audio.src = songs[currentSongIndex].file;
 audio.volume = volumeControl.value;
 
-function loadSong(songIndex) {
-    const song = songs[songIndex];
+function loadSong(index) {
+    const song = songs[index];
+    currentSongIndex = index; // Update current song index
     songTitle.textContent = song.title;
     songArtist.textContent = song.artist;
     coverImage.src = song.cover;
     audio.src = song.file;
+    pauseSong(); // Start in paused state
 }
 
-function playPauseSong() {
-    if (isPlaying) {
-        audio.pause();
-        playBtn.textContent = "▶️";
-    } else {
-        audio.play();
-        playBtn.textContent = "⏸️";
-    }
-    isPlaying = !isPlaying;
+function playSong() {
+    audio.play();
+    playBtn.textContent = "⏸"; // Change to pause icon
+    isPlaying = true;
+}
+
+function pauseSong() {
+    audio.pause();
+    playBtn.textContent = "▶️"; // Change to play icon
+    isPlaying = false;
 }
 
 function prevSong() {
     currentSongIndex = (currentSongIndex > 0) ? currentSongIndex - 1 : songs.length - 1;
     loadSong(currentSongIndex);
-    if (isPlaying) audio.play();
+    if (isPlaying) playSong();
 }
 
 function nextSong() {
     currentSongIndex = (currentSongIndex < songs.length - 1) ? currentSongIndex + 1 : 0;
     loadSong(currentSongIndex);
-    if (isPlaying) audio.play();
+    if (isPlaying) playSong();
 }
+
+// Update progress bar and time display
+function updateProgressBar() {
+    const currentTime = audio.currentTime;
+    const duration = audio.duration;
+
+    progressBar.max = duration || 0; // Avoid NaN when duration is not available
+    progressBar.value = currentTime;
+
+    currentTimeEl.textContent = formatTime(currentTime);
+    totalDurationEl.textContent = formatTime(duration);
+}
+
+// Format time in mm:ss
+function formatTime(seconds) {
+    const mins = Math.floor(seconds / 60) || 0;
+    const secs = Math.floor(seconds % 60) || 0;
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+}
+
+// Allow user to skip to a specific part
+progressBar.addEventListener('input', () => {
+    audio.currentTime = progressBar.value;
+});
+
+// Event listeners for audio
+audio.addEventListener('timeupdate', updateProgressBar);
+audio.addEventListener('loadedmetadata', updateProgressBar);
+
+// Search Functionality
 function searchSongs() {
     const query = searchBar.value.toLowerCase();
     const filteredSongs = songs.filter(song => song.title.toLowerCase().includes(query));
     displaySongList(filteredSongs);
 }
+
 function displaySongList(songArray) {
     songList.innerHTML = ""; // Clear the list
-    songArray.forEach((song, index) => {
+    songArray.forEach((song) => {
         const songItem = document.createElement('div');
         songItem.classList.add('song-item');
         songItem.textContent = `${song.title} - ${song.artist}`;
         songItem.addEventListener('click', () => {
-            currentSongIndex = index;
-            loadSong(index);
-            if (isPlaying) audio.play();
+            const actualIndex = songs.findIndex(s => s.title === song.title && s.artist === song.artist);
+            if (actualIndex !== -1) {
+                currentSongIndex = actualIndex; // Update current index
+                loadSong(currentSongIndex);
+                playSong();
+            }
         });
         songList.appendChild(songItem);
     });
     songList.classList.remove('hidden');
 }
 
-viewAllBtn.addEventListener('click', () => {
-    displaySongList(songs);
+// Swipe Gesture Detection
+let startX = 0;
+coverImage.addEventListener("touchstart", (e) => {
+    startX = e.touches[0].clientX;
 });
 
-searchBar.addEventListener('input', searchSongs);
+coverImage.addEventListener("touchend", (e) => {
+    const endX = e.changedTouches[0].clientX;
+    const deltaX = endX - startX;
 
+    if (deltaX > 50) {
+        prevSong(); // Swipe right - previous song
+    } else if (deltaX < -50) {
+        nextSong(); // Swipe left - next song
+    }
+});
 
-playBtn.addEventListener('click', playPauseSong);
+// Event Listeners
+playBtn.addEventListener('click', () => {
+    if (isPlaying) {
+        pauseSong();
+    } else {
+        playSong();
+    }
+});
+
 prevBtn.addEventListener('click', prevSong);
 nextBtn.addEventListener('click', nextSong);
-
 volumeControl.addEventListener('input', (e) => {
     audio.volume = e.target.value;
 });
+searchBar.addEventListener('input', searchSongs);
+viewAllBtn.addEventListener('click', () => displaySongList(songs));
 
-// Initial load
+// Initial Load
 loadSong(currentSongIndex);
